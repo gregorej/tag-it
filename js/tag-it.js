@@ -84,6 +84,8 @@
             // for handling static scoping inside callbacks
             var that = this;
 
+			this.options.fullName = this.options.fullName || (this.options.itemName + "[" + this.options.fieldName +"][]");
+
             // There are 2 kinds of DOM nodes this widget can be instantiated on:
             //     1. UL, OL, or some element containing either of these.
             //     2. INPUT, in which case 'singleField' is overridden to true,
@@ -233,6 +235,15 @@
                     }
                 });
             }
+
+			//GDYK: load tags from existing elements
+			//window.console.log(this.options.fullName);
+			$('input[name="' + this.options.fullName + '"]').each(function(index) {
+				var val = $(this).val();
+				console.log("item: %o", this);
+				$(this).remove();
+				that.createTag(val);
+			})
         },
 
         _cleanedInput: function() {
@@ -340,7 +351,7 @@
                 this._updateSingleTagsField(tags);
             } else {
                 var escapedValue = label.html();
-                tag.append('<input type="hidden" style="display:none;" value="' + escapedValue + '" name="' + this.options.itemName + '[' + this.options.fieldName + '][]" />');
+                tag.append('<input type="hidden" style="display:none;" value="' + escapedValue + '" name="' + this.options.fullName + '" />');
             }
 
             this._trigger('onTagAdded', null, tag);
