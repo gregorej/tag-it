@@ -30,11 +30,13 @@
         options: {
             itemName          : 'item',
             fieldName         : 'tags',
+			fullName		  : null,
             availableTags     : [],
             tagSource         : null,
             removeConfirmation: false,
             caseSensitive     : true,
             placeholderText   : null,
+			useLabels		  : false,
 
             // When enabled, quotes are not neccesary
             // for inputting multi-word tags.
@@ -184,7 +186,8 @@
                     // Tab will also create a tag, unless the tag input is empty, in which case it isn't caught.
                     if (
                         event.which == $.ui.keyCode.COMMA ||
-                        event.which == $.ui.keyCode.ENTER ||
+						// do not intercept ENTER if autocomplete is open. We want autocomplete to deal with ENTER
+                        (!that._tagInput.data("is_autocomplete_open") && event.which == $.ui.keyCode.ENTER) ||
                         (
                             event.which == $.ui.keyCode.TAB &&
                             that._tagInput.val() !== ''
@@ -226,24 +229,50 @@
                         // The only artifact of this is that while the user holds down the mouse button
                         // on the selected autocomplete item, a tag is shown with the pre-autocompleted text,
                         // and is changed to the autocompleted text upon mouseup.
+
                         if (that._tagInput.val() === '') {
                             that.removeTag(that._lastTag(), false);
                         }
-                        that.createTag(ui.item.value);
+                        that.createTag(ui.item);
                         // Preventing the tag input to be updated with the chosen value.
                         return false;
-                    }
+                    },
+					focus: function(event, ui) {
+						that._tagInput.val(ui.item.label);//create item by label not by value
+						event.stopImmediatePropagation();
+						return false;
+					},
+					open: function(event, ui) {
+						that._tagInput.data("is_autocomplete_open", true);
+					},
+					close: function(event, ui) {
+						console.debug("closing autocomplete");
+						that._tagInput.data("is_autocomplete_open", false);
+					}
                 });
             }
-
+			
 			//GDYK: load tags from existing elements
+			var predefined = [];
+			if (this.options.useLabels) {
+				//search for elements with label and value
+				var labelElements = $('input[name="' + this.options.fullName + '[label]"]');
+				var valueElements = $('input[name="' + this.options.fullName + '[value]"]');
+				if (labelElements.length != valueElements.length) {
+					console.warn("there is different number of value elements that label elements")
+				}
+				//construct dictionary
+				labelElements.each(function() {predefined.push({"label": $(this).val()}); $(this).remove(); });
+				valueElements.each(function(index) { predefined[index]["value"] = $(this).val(); $(this).remove(); });
+			}
 			//window.console.log(this.options.fullName);
 			$('input[name="' + this.options.fullName + '"]').each(function(index) {
 				var val = $(this).val();
-				console.log("item: %o", this);
 				$(this).remove();
-				that.createTag(val);
-			})
+				predefined.push(val);
+			});
+			console.debug("predefined = %o", predefined);
+			$.each(predefined, function() { that.createTag(this)});
         },
 
         _cleanedInput: function() {
@@ -316,15 +345,23 @@
         },
 
         createTag: function(value, additionalClass) {
+			var labelText = null;
+			if (value.value) {
+				labelText = value.label || null;
+				value = value.value;
+			}
             var that = this;
             // Automatically trims the value of leading and trailing whitespace.
             value = $.trim(value);
+			if (!labelText) {
+				labelText = value;
+			}
 
             if (!this._isNew(value) || value === '') {
                 return false;
             }
 
-            var label = $(this.options.onTagClicked ? '<a class="tagit-label"></a>' : '<span class="tagit-label"></span>').text(value);
+            var label = $(this.options.onTagClicked ? '<a class="tagit-label"></a>' : '<span class="tagit-label"></span>').text(labelText);
 
             // Create tag.
             var tag = $('<li></li>')
@@ -350,8 +387,14 @@
                 tags.push(value);
                 this._updateSingleTagsField(tags);
             } else {
-                var escapedValue = label.html();
-                tag.append('<input type="hidden" style="display:none;" value="' + escapedValue + '" name="' + this.options.fullName + '" />');
+                var escapedValue = value;
+				if (this.options.useLabels) {
+					tag.append('<input type="hidden" style="display:none;" value="' + escapedValue +'" name="' + this.options.fullName + '[value]" />');
+					tag.append('<input type="hidden" style="display:none;" value="' + labelText +'" name="' + this.options.fullName + '[label]" />');
+				}
+				else {
+	                tag.append('<input type="hidden" style="display:none;" value="' + escapedValue + '" name="' + this.options.fullName + '" />');
+				}
             }
 
             this._trigger('onTagAdded', null, tag);
